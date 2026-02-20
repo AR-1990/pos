@@ -1,0 +1,107 @@
+@extends('layouts.app')
+
+@section('content')
+<div class="sales-report-dashboard">
+    <div class="dashboard-content__head">
+        <h2 class="heading">Top Products Report</h2>
+    </div>
+
+    <div class="dashboard-card">
+        <div class="cashbook-filter-section">
+            <div class="cashbook-filter">
+                <form id="filterForm" class="cashbook-filter__dates">
+                    <input type="date" id="startDate" name="start_date" class="form-control" value="{{ $startDate }}">
+                    <input type="date" id="endDate" name="end_date" class="form-control" value="{{ $endDate }}">
+                    <button type="button" id="filterBtn" class="themeBtn">
+                        <i class="fa-solid fa-filter"></i> Filter
+                    </button>
+                    <button type="button" id="resetBtn" class="themeBtn themeBtn--gray">Reset</button>
+                </form>
+                <a href="{{ route('reports.top-products.export') }}" id="exportBtn" class="themeBtn themeBtn--green">
+                    <i class="fa-solid fa-file-csv me-2"></i> Export CSV
+                </a>
+            </div>
+        </div>
+
+        <div class="transaction-ledger">
+            <div class="transaction-ledger__header">
+                <h3 class="transaction-ledger__title">Top Products Report</h3>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-hover" id="topProductsTable">
+                    <thead>
+                        <tr>
+                            <th>Code</th>
+                            <th>Product Name</th>
+                            <th>Total Sold Qty</th>
+                            <th>Total Revenue</th>
+                        </tr>
+                    </thead>
+                    <tbody></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+@push('scripts')
+<script>
+    $(document).ready(function () {
+        if ($.fn.DataTable.isDataTable('#topProductsTable')) {
+            $('#topProductsTable').DataTable().destroy();
+        }
+
+        var table = $('#topProductsTable').DataTable({
+            processing: true,
+            serverSide: true,
+            ajax: {
+                url: "{{ route('reports.top-products') }}",
+                data: function (d) {
+                    d.start_date = $('#startDate').val();
+                    d.end_date = $('#endDate').val();
+                }
+            },
+            columns: [{
+                    data: 'product_code',
+                    name: 'product.code'
+                },
+                {
+                    data: 'product_name',
+                    name: 'product.name'
+                },
+                {
+                    data: 'total_qty',
+                    name: 'total_qty',
+                    searchable: false
+                },
+                {
+                    data: 'total_revenue',
+                    name: 'total_revenue',
+                    searchable: false
+                }
+            ],
+            order: [
+                [2, 'desc']
+            ]
+        });
+
+        $('#filterBtn').on('click', function () {
+            table.draw();
+            updateExportLink();
+        });
+
+        $('#resetBtn').on('click', function () {
+            window.location.href = "{{ route('reports.top-products') }}";
+        });
+
+        function updateExportLink() {
+            var startDate = $('#startDate').val();
+            var endDate = $('#endDate').val();
+            var url = "{{ route('reports.top-products.export') }}";
+            $('#exportBtn').attr('href', url + '?start_date=' + startDate + '&end_date=' + endDate);
+        }
+    });
+
+</script>
+@endpush
+@endsection
