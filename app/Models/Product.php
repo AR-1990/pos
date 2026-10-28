@@ -55,4 +55,33 @@ class Product extends Model
     {
         return $this->belongsToMany(Tax::class, 'product_tax')->withPivot('tax_rate');
     }
+
+    /**
+     * In-store EAN-13 for a product: "200" (GS1 range reserved for in-store codes)
+     * + the zero-padded id + check digit. Unique because ids are; falls back to a
+     * random 2xx code if someone typed that exact number on another product.
+     */
+    public static function generateBarcode(int $id): string
+    {
+        $code = static::ean13('200' . str_pad((string) $id, 9, '0', STR_PAD_LEFT));
+
+        while (static::where('barcode', $code)->where('id', '!=', $id)->exists()) {
+            $code = static::ean13('2' . random_int(10, 99) . str_pad((string) random_int(0, 999999999), 9, '0', STR_PAD_LEFT));
+        }
+
+        return $code;
+    }
+
+    /**
+     * Appends the EAN-13 check digit to 12 digits.
+     */
+    public static function ean13(string $twelve): string
+    {
+        $sum = 0;
+        foreach (str_split($twelve) as $i => $digit) {
+            $sum += (int) $digit * ($i % 2 ? 3 : 1);
+        }
+
+        return $twelve . ((10 - $sum % 10) % 10);
+    }
 }

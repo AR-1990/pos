@@ -286,7 +286,7 @@ class StoreDemoSeeder extends Seeder
                 Product::firstOrCreate(['code' => $code], [
                     'sku' => 'SKU-' . str_pad($i, 3, '0', STR_PAD_LEFT),
                     'name' => $name,
-                    'barcode' => '89' . str_pad($i, 11, '0', STR_PAD_LEFT),
+                    'barcode' => Product::ean13('890' . str_pad($i, 9, '0', STR_PAD_LEFT)),
                     'category_id' => $category->id,
                     'sub_category_id' => $sub->id,
                     'vendor_id' => $vendor?->id,

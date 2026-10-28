@@ -118,6 +118,14 @@
             });
         }
 
+        function isEan13(v) {
+            v = String(v);
+            if (!/^\d{13}$/.test(v)) { return false; }
+            var sum = 0;
+            for (var i = 0; i < 12; i++) { sum += +v[i] * (i % 2 ? 3 : 1); }
+            return (10 - sum % 10) % 10 === +v[12];
+        }
+
         function renderSheet() {
             var size = $('#labelSize').val().split('x');
             var $sheet = $('#labelSheet').empty();
@@ -137,7 +145,8 @@
                     }
                     $sheet.append($l);
                     try {
-                        JsBarcode(svg, value, {format: 'CODE128', displayValue: true, fontSize: 11, height: 40, margin: 0, width: 1.4});
+                        // Valid EAN-13 (incl. auto-generated in-store codes) prints as EAN-13; anything else as CODE128
+                        JsBarcode(svg, value, {format: isEan13(value) ? 'EAN13' : 'CODE128', displayValue: true, fontSize: 11, height: 40, margin: 0, width: 1.4});
                     } catch (e) {
                         $(svg).replaceWith('<small class="text-danger">Invalid barcode</small>');
                     }

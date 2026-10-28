@@ -92,8 +92,7 @@
 
                 <!-- Row 4 -->
                 <div class="col-md-4">
-                    <label class="form-label">Barcode</label>
-                    <input type="text" class="form-control" name="barcode" placeholder="Optional" value="{{ old('barcode', $product->barcode) }}">
+                    @include('partials.barcode-field', ['value' => old('barcode', $product->barcode), 'productId' => $product->id])
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Purchase Price <span class="text-danger">*</span></label>

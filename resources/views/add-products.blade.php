@@ -89,8 +89,7 @@
 
                 <!-- Row 4 -->
                 <div class="col-md-4">
-                    <label class="form-label">Barcode</label>
-                    <input type="text" class="form-control" name="barcode" placeholder="Optional" value="{{ old('barcode') }}">
+                    @include('partials.barcode-field', ['value' => old('barcode'), 'productId' => null])
                 </div>
                 <div class="col-md-4">
                     <label class="form-label">Purchase Price <span class="text-danger">*</span></label>
@@ -194,6 +193,10 @@
 
                 <!-- Action Buttons -->
                 <div class="col-12">
+                    <div class="form-check mb-3">
+                        <input class="form-check-input" type="checkbox" name="print_label" value="1" id="printLabel" {{ old('print_label') ? 'checked' : '' }}>
+                        <label class="form-check-label" for="printLabel">Open barcode label printing after saving</label>
+                    </div>
                     <div class="add-product-form__actions">
                         <button type="submit" class="themeBtn">
                             Save Product

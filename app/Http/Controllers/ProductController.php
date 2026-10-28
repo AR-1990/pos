@@ -83,7 +83,8 @@ class ProductController extends Controller
             'unit_value' => 'nullable|numeric|min:0',
             'secondary_unit' => 'nullable|string|max:255',
             'pack_size' => 'nullable|string|max:255',
-            'barcode' => 'nullable|string|max:255',
+            // Printable barcode characters only, so every scanner can read the label
+            'barcode' => ['nullable', 'string', 'max:48', 'regex:/^[A-Za-z0-9\-\.\/]+$/', 'unique:products,barcode'],
             'purchase_price' => 'required|numeric|min:0',
             'selling_price' => 'required|numeric|min:0',
             'opening_stock' => 'nullable|numeric|min:0',
@@ -111,7 +112,7 @@ class ProductController extends Controller
         }
 
         // Stock only changes through StockService, so the product starts at 0
-        $productData = $request->except(['taxes', 'tax_rates', 'batch_expiry', 'opening_stock', 'store_id', 'stock_quantity', '_token']);
+        $productData = $request->except(['taxes', 'tax_rates', 'batch_expiry', 'opening_stock', 'store_id', 'stock_quantity', 'print_label', '_token']);
         $productData['stock_quantity'] = 0;
         $productData['batch_expiry_enabled'] = $request->batch_expiry === 'Yes';
 
@@ -120,8 +121,13 @@ class ProductController extends Controller
             $productData['expiry_date'] = null;
         }
 
-        DB::transaction(function () use ($request, $productData, $openingStock, $storeId) {
+        $product = DB::transaction(function () use ($request, $productData, $openingStock, $storeId) {
             $product = Product::create($productData);
+
+            // No barcode typed or scanned: give it a scannable in-store EAN-13
+            if (blank($product->barcode)) {
+                $product->update(['barcode' => Product::generateBarcode($product->id)]);
+            }
 
             if ($request->has('taxes')) {
                 $syncData = [];
@@ -134,9 +140,16 @@ class ProductController extends Controller
             if ($openingStock > 0) {
                 StockService::move($storeId, $product->id, $openingStock, 'opening', $product, 'Opening stock');
             }
+
+            return $product;
         });
 
-        return redirect()->route('all-products')->with('success', 'Product added successfully.');
+        $message = "Product added. Barcode: {$product->barcode}";
+        if ($request->boolean('print_label')) {
+            return redirect()->route('products.labels', ['ids' => $product->id])->with('success', $message);
+        }
+
+        return redirect()->route('all-products')->with('success', $message);
     }
 
     public function edit($id)
@@ -178,7 +191,7 @@ class ProductController extends Controller
             'unit_value' => 'nullable|numeric|min:0',
             'secondary_unit' => 'nullable|string|max:255',
             'pack_size' => 'nullable|string|max:255',
-            'barcode' => 'nullable|string|max:255',
+            'barcode' => ['nullable', 'string', 'max:48', 'regex:/^[A-Za-z0-9\-\.\/]+$/', 'unique:products,barcode,' . $id],
             'purchase_price' => 'required|numeric|min:0',
             'selling_price' => 'required|numeric|min:0',
             'min_stock_level' => 'nullable|integer|min:0',
@@ -196,6 +209,11 @@ class ProductController extends Controller
 
         if (!$productData['batch_expiry_enabled']) {
             $productData['expiry_date'] = null;
+        }
+
+        // A product is never left without a barcode
+        if (blank($productData['barcode'] ?? null)) {
+            $productData['barcode'] = Product::generateBarcode($product->id);
         }
 
         $product->update($productData);
