@@ -13,9 +13,17 @@ class SaleItem extends Model
         'sale_id',
         'product_id',
         'quantity',
+        'returned_qty',
         'price',
+        'discount',
+        'tax',
         'purchase_price',
         'total'
+    ];
+
+    protected $casts = [
+        'quantity' => 'float',
+        'returned_qty' => 'float',
     ];
 
     public function sale()

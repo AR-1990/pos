@@ -19,7 +19,7 @@ class SubCategoryController extends Controller
                 $query->where('status', $request->status);
             }
             
-            $data = $query->get();
+            $data = $query; // let DataTables paginate in SQL
             
             return DataTables::of($data)
                 ->addIndexColumn()

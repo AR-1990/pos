@@ -23,6 +23,7 @@ class User extends Authenticatable
         'profile_image',
         'password',
         'role_id',
+        'store_id',
         'identity_number',
         'identity_card_front',
         'identity_card_back',
@@ -61,6 +62,20 @@ class User extends Authenticatable
     public function role()
     {
         return $this->belongsTo(Role::class);
+    }
+
+    public function store()
+    {
+        return $this->belongsTo(Store::class);
+    }
+
+    /**
+     * Admins (Super Admin, or any role given "All Stores" view permission)
+     * can see and sell for every store. Everyone else is locked to their store.
+     */
+    public function canViewAllStores()
+    {
+        return $this->hasPermission('all_stores', 'view');
     }
 
     /**

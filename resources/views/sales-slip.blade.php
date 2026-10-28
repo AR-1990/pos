@@ -37,6 +37,12 @@
         <p style="font-size: 1.2em; border: 2px solid #000; padding: 5px; display: inline-block; margin-bottom: 10px;">
             <strong>Sale ID: {{ $sale->id }}</strong>
         </p>
+        @if($sale->store)
+        <p><strong>Store:</strong> {{ $sale->store->name }}@if($sale->store->phone) ({{ $sale->store->phone }})@endif</p>
+        @endif
+        @if($sale->user)
+        <p><strong>Cashier:</strong> {{ $sale->user->name }}</p>
+        @endif
         <p><strong>Date:</strong> {{ $sale->date }}</p>
         <p><strong>Customer:</strong> {{ $sale->customer->name }}</p>
         <p><strong>Phone:</strong> {{ $sale->customer->phone }}</p>

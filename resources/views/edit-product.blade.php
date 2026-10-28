@@ -106,8 +106,19 @@
 
                 <!-- Row 5 -->
                 <div class="col-md-3">
-                    <label class="form-label">Stock Quantity</label>
-                    <input type="number" class="form-control" name="stock_quantity" placeholder="Current Stock" value="{{ old('stock_quantity', $product->stock_quantity) }}" min="0">
+                    <label class="form-label">Current Stock</label>
+                    <div class="form-control bg-light" style="height:auto; min-height:38px;">
+                        @forelse($storeStocks as $ss)
+                            <div class="d-flex justify-content-between"><span>{{ $ss->store->name ?? 'Store #' . $ss->store_id }}</span><strong>{{ rtrim(rtrim(number_format($ss->quantity, 3, '.', ''), '0'), '.') }}</strong></div>
+                        @empty
+                            <span class="text-muted">No stock recorded</span>
+                        @endforelse
+                    </div>
+                    @permission('stock_adjustments', 'add')
+                        <small><a href="{{ route('stock-adjustments.create') }}">Change stock via Stock Adjustments</a></small>
+                    @else
+                        <small class="text-muted">Stock changes go through Stock Adjustments.</small>
+                    @endpermission
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Min Stock Level</label>

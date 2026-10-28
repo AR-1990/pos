@@ -27,6 +27,8 @@
             </div>
             <div class="col-md-6 text-md-end">
                 <h5 class="text-primary mb-3">Sale Information</h5>
+                <p class="mb-1"><strong>Store:</strong> {{ $sale->store->name ?? "-" }}</p>
+                <p class="mb-1"><strong>Cashier:</strong> {{ $sale->user->name ?? "-" }}</p>
                 <p class="mb-1"><strong>Date:</strong> {{ $sale->date }}</p>
                 <p class="mb-1"><strong>Status:</strong> 
                     <span class="badge {{ $sale->status == 'completed' ? 'bg-success' : ($sale->status == 'returned' ? 'bg-danger' : 'bg-warning') }}">

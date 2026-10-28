@@ -37,6 +37,7 @@
                             <th>Name</th>
                             <th>Email</th>
                             <th>Role</th>
+                            <th>Store</th>
                             <th>Designation</th>
                             <th>Status</th>
                             <th>Action</th>
@@ -66,6 +67,7 @@
                 {data: 'name', name: 'name'},
                 {data: 'email', name: 'email'},
                 {data: 'role_name', name: 'role_name'},
+                {data: 'store_name', name: 'store_name', orderable: false, searchable: false},
                 {data: 'designation', name: 'designation'},
                 {data: 'status', name: 'status'},
                 {data: 'action', name: 'action', orderable: false, searchable: false},

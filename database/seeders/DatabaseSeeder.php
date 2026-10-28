@@ -20,6 +20,15 @@ class DatabaseSeeder extends Seeder
             LoanAdvancesSeeder::class,
             LoanTypesSeeder::class,
             PayrollSeeder::class,
+            CategorySeeder::class,
+            MeasurementUnitSeeder::class,
+            VendorSeeder::class,
+            WarehouseSeeder::class,
+            CustomerSeeder::class,
+            DiscountSeeder::class,
+            ExpenseHeadSeeder::class,
+            CashbookHeadSeeder::class,
+            StoreDemoSeeder::class,
         ]);
     }
 }

@@ -103,8 +103,22 @@
 
                 <!-- Row 5 -->
                 <div class="col-md-3">
-                    <label class="form-label">Stock Quantity</label>
-                    <input type="number" class="form-control" name="stock_quantity" placeholder="Current Stock" value="{{ old('stock_quantity', 0) }}" min="0">
+                    <label class="form-label">Opening Stock</label>
+                    <input type="number" class="form-control" name="opening_stock" placeholder="0" value="{{ old('opening_stock', 0) }}" min="0" step="any">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label">Opening Stock Store</label>
+                    @if(auth()->user()->canViewAllStores())
+                        <select class="form-select" name="store_id">
+                            <option value="">Select store</option>
+                            @foreach($stores as $s)
+                                <option value="{{ $s->id }}" {{ (string) old('store_id', $defaultStoreId) === (string) $s->id ? 'selected' : '' }}>{{ $s->name }}</option>
+                            @endforeach
+                        </select>
+                    @else
+                        <input type="text" class="form-control" value="{{ $stores->first()->name ?? 'No store assigned' }}" disabled>
+                    @endif
+                    <small class="text-muted">Later changes go through Stock Adjustments.</small>
                 </div>
                 <div class="col-md-3">
                     <label class="form-label">Min Stock Level</label>

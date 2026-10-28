@@ -4,10 +4,33 @@
 
 <!-- Inventory Dashboard -->
 <div class="inventory-dashboard">
-    <div class="dashboard-content__head mb-4">
-        <h2 class="heading">Dashboard Overview</h2>
-        <p class="text-muted">Welcome back! Here's what's happening with your store today.</p>
+    @php $cur = $globalSettings->currency ?? '$'; @endphp
+    <div class="dashboard-content__head mb-4 d-flex flex-wrap justify-content-between align-items-end gap-2">
+        <div>
+            <h2 class="heading">Welcome back, {{ Str::before(auth()->user()->name, ' ') }}</h2>
+            <p class="text-muted mb-0">
+                Here's what's happening at
+                <strong>{{ $currentStore->name ?? 'all stores' }}</strong> today, {{ now()->format('l, d M Y') }}.
+            </p>
+        </div>
+        @permission('sales', 'add')
+        <a href="{{ route('sales.index') }}" class="themeBtn"><i class="fa-solid fa-cash-register me-2"></i>New Sale</a>
+        @endpermission
     </div>
+
+    <style>
+        .store-split { display: grid; gap: 12px; }
+        .store-split__row { display: grid; grid-template-columns: minmax(120px, 1.2fr) 3fr repeat(3, minmax(90px, 1fr)); gap: 12px; align-items: center; padding: 10px 0; border-bottom: 1px solid #f1f1f1; font-size: 14px; }
+        .store-split__row--head { font-size: 12px; text-transform: uppercase; color: #888; font-weight: 600; letter-spacing: .03em; }
+        .store-split__bar { height: 10px; background: #f3f4f6; border-radius: 999px; overflow: hidden; }
+        .store-split__bar span { display: block; height: 100%; background: #ff6b00; border-radius: 999px; }
+        .store-split__num { text-align: right; font-variant-numeric: tabular-nums; }
+        @media (max-width: 767px) {
+            .store-split__row { grid-template-columns: 1fr 1fr; }
+            .store-split__row > :nth-child(2) { grid-column: 1 / -1; order: 3; }
+            .store-split__row--head { display: none; }
+        }
+    </style>
 
     <div class="dashboard-card">
         <!-- Section 1: Inventory Stats -->
@@ -64,15 +87,29 @@
         <div class="row g-3 mb-4">
             <div class="col-xl-3 col-sm-6">
                 <div class="metric-card">
+                    <div class="metric-card__icon bg-warning-subtle text-warning">
+                        <i class="fa-solid fa-sun"></i>
+                    </div>
+                    <div class="metric-card__content">
+                        <h3 class="metric-card__title">Today's Sale</h3>
+                        <p class="metric-card__value">{{ $cur }}{{ number_format($todayRevenue, 2) }}</p>
+                        <small class="text-muted">{{ $todayOrders }} {{ Str::plural('order', $todayOrders) }}</small>
+                    </div>
+                </div>
+            </div>
+            <div class="col-xl-3 col-sm-6">
+                <div class="metric-card">
                     <div class="metric-card__icon bg-success-subtle text-success">
                         <i class="fa-solid fa-cart-shopping"></i>
                     </div>
                     <div class="metric-card__content">
                         <h3 class="metric-card__title">Total Revenue</h3>
-                        <p class="metric-card__value text-success">{{ $globalSettings->currency ?? '$' }}{{ number_format($totalRevenue, 2) }}</p>
+                        <p class="metric-card__value text-success">{{ $cur }}{{ number_format($totalRevenue, 2) }}</p>
+                        <small class="text-muted">{{ number_format($totalOrders) }} completed orders</small>
                     </div>
                 </div>
             </div>
+            @permission('expenses', 'view')
             <div class="col-xl-3 col-sm-6">
                 <div class="metric-card">
                     <div class="metric-card__icon bg-danger-subtle text-danger">
@@ -80,10 +117,12 @@
                     </div>
                     <div class="metric-card__content">
                         <h3 class="metric-card__title">Expenses (This Month)</h3>
-                        <p class="metric-card__value text-danger">{{ $globalSettings->currency ?? '$' }}{{ number_format($currentMonthExpense, 2) }}</p>
+                        <p class="metric-card__value text-danger">{{ $cur }}{{ number_format($currentMonthExpense, 2) }}</p>
                     </div>
                 </div>
             </div>
+            @endpermission
+            @permission('payroll', 'view')
             <div class="col-xl-3 col-sm-6">
                 <div class="metric-card">
                     <div class="metric-card__icon bg-primary-subtle text-primary">
@@ -91,10 +130,12 @@
                     </div>
                     <div class="metric-card__content">
                         <h3 class="metric-card__title">Salaries (This Month)</h3>
-                        <p class="metric-card__value text-primary">{{ $globalSettings->currency ?? '$' }}{{ number_format($currentMonthSalary, 2) }}</p>
+                        <p class="metric-card__value text-primary">{{ $cur }}{{ number_format($currentMonthSalary, 2) }}</p>
                     </div>
                 </div>
             </div>
+            @endpermission
+            @permission('loans', 'view')
             <div class="col-xl-3 col-sm-6">
                 <div class="metric-card">
                     <div class="metric-card__icon bg-secondary-subtle text-secondary">
@@ -102,11 +143,39 @@
                     </div>
                     <div class="metric-card__content">
                         <h3 class="metric-card__title">Outstanding Loans</h3>
-                        <p class="metric-card__value text-secondary">{{ $globalSettings->currency ?? '$' }}{{ number_format($totalLoan, 2) }}</p>
+                        <p class="metric-card__value text-secondary">{{ $cur }}{{ number_format($totalLoan, 2) }}</p>
                     </div>
                 </div>
             </div>
+            @endpermission
         </div>
+
+        @if($storeBreakdown->isNotEmpty())
+        @php $maxWeek = max(1, $storeBreakdown->max('week_total')); @endphp
+        <div class="chart-card mb-4">
+            <div class="d-flex justify-content-between align-items-center mb-2">
+                <h3 class="chart-card__title mb-0"><i class="fa-solid fa-store me-2 text-secondary"></i>Sales by Store</h3>
+                @permission('stores', 'view')
+                <a href="{{ route('stores.index') }}" class="btn btn-sm btn-outline-primary">Manage Stores</a>
+                @endpermission
+            </div>
+            <div class="store-split">
+                <div class="store-split__row store-split__row--head">
+                    <span>Store</span><span>Last 7 days</span>
+                    <span class="store-split__num">Today</span><span class="store-split__num">7 days</span><span class="store-split__num">All time</span>
+                </div>
+                @foreach($storeBreakdown as $st)
+                <div class="store-split__row">
+                    <span class="fw-semibold">{{ $st->name }}<br><small class="text-muted fw-normal">{{ $st->orders_count }} orders</small></span>
+                    <div class="store-split__bar" title="{{ $cur }}{{ number_format($st->week_total, 2) }}"><span style="width: {{ round(max(0, $st->week_total) / $maxWeek * 100) }}%"></span></div>
+                    <span class="store-split__num">{{ $cur }}{{ number_format($st->today_total ?? 0) }}</span>
+                    <span class="store-split__num">{{ $cur }}{{ number_format($st->week_total ?? 0) }}</span>
+                    <span class="store-split__num fw-semibold">{{ $cur }}{{ number_format($st->all_total ?? 0) }}</span>
+                </div>
+                @endforeach
+            </div>
+        </div>
+        @endif
 
         <!-- Middle Row - Charts -->
         <div class="row g-3 mb-4">
@@ -149,10 +218,15 @@
                                 @forelse($recentSales as $sale)
                                 <tr>
                                     <td>{{ \Carbon\Carbon::parse($sale->date)->format('d M') }}</td>
-                                    <td>{{ $sale->customer ? Str::limit($sale->customer->name, 15) : 'Walk-in' }}</td>
-                                    <td>{{ $globalSettings->currency ?? '$' }}{{ number_format($sale->grand_total, 2) }}</td>
                                     <td>
-                                        <span class="badge bg-{{ $sale->status == 'completed' ? 'success' : 'warning' }}">
+                                        {{ $sale->customer ? Str::limit($sale->customer->name, 15) : 'Walk-in' }}
+                                        @if(!$currentStore && $sale->store)
+                                            <br><small class="text-muted"><i class="fa-solid fa-store me-1"></i>{{ $sale->store->name }}</small>
+                                        @endif
+                                    </td>
+                                    <td>{{ $cur }}{{ number_format($sale->grand_total, 2) }}</td>
+                                    <td>
+                                        <span class="badge bg-{{ $sale->status == 'completed' ? 'success' : ($sale->status == 'returned' ? 'danger' : 'warning') }}">
                                             {{ ucfirst($sale->status) }}
                                         </span>
                                     </td>

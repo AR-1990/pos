@@ -8,6 +8,7 @@ use Illuminate\Database\Eloquent\Model;
 class Expense extends Model
 {
     use HasFactory;
+    use Concerns\BelongsToStore;
 
     protected $guarded = [];
 

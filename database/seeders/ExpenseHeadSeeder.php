@@ -14,16 +14,16 @@ class ExpenseHeadSeeder extends Seeder
     public function run(): void
     {
         $heads = [
-            ['name' => 'Rent Expense', 'code' => 'EXP-001', 'status' => 'Active'],
-            ['name' => 'Electricity Bill', 'code' => 'EXP-002', 'status' => 'Active'],
-            ['name' => 'Salaries', 'code' => 'EXP-003', 'status' => 'Active'],
-            ['name' => 'Office Maintenance', 'code' => 'EXP-004', 'status' => 'Active'],
-            ['name' => 'Entertainment', 'code' => 'EXP-005', 'status' => 'Active'],
-            ['name' => 'Stationery', 'code' => 'EXP-006', 'status' => 'Inactive'],
+            ['name' => 'Rent Expense', 'code' => 'EXP-001', 'status' => 1],
+            ['name' => 'Electricity Bill', 'code' => 'EXP-002', 'status' => 1],
+            ['name' => 'Salaries', 'code' => 'EXP-003', 'status' => 1],
+            ['name' => 'Office Maintenance', 'code' => 'EXP-004', 'status' => 1],
+            ['name' => 'Entertainment', 'code' => 'EXP-005', 'status' => 1],
+            ['name' => 'Stationery', 'code' => 'EXP-006', 'status' => 0],
         ];
 
         foreach ($heads as $head) {
-            ExpenseHead::create($head);
+            ExpenseHead::firstOrCreate(['code' => $head['code']], $head);
         }
     }
 }

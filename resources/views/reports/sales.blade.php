@@ -33,6 +33,7 @@
                         <tr>
                             <th>ID</th>
                             <th>Date</th>
+                            <th>Store</th>
                             <th>Customer</th>
                             <th>Payment Method</th>
                             <th>Subtotal</th>
@@ -73,6 +74,12 @@
                 {
                     data: 'date',
                     name: 'date'
+                },
+                {
+                    data: 'store_name',
+                    name: 'store_name',
+                    orderable: false,
+                    searchable: false
                 },
                 {
                     data: 'customer_name',

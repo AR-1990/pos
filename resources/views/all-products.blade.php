@@ -62,6 +62,7 @@
                             <th>Barcode</th>
                             <th>Purchase Price</th>
                             <th>Selling Price</th>
+                            <th title="{{ $stockScope }}">Stock <small class="text-muted fw-normal">({{ $stockScope }})</small></th>
                             <th>Batch / Expiry</th>
                             <th>Status</th>
                             <th>Action</th>
@@ -76,6 +77,19 @@
                             <td>{{ $product->barcode ?? '-' }}</td>
                             <td>{{ $globalSettings->currency ?? '$' }}{{ number_format($product->purchase_price, 2) }}</td>
                             <td>{{ $globalSettings->currency ?? '$' }}{{ number_format($product->selling_price, 2) }}</td>
+                            @php
+                                $qty = (float) $product->scoped_stock;
+                                $min = $product->min_stock_level ?? 10;
+                            @endphp
+                            <td data-order="{{ $qty }}">
+                                @if($qty <= 0)
+                                    <span class="badge bg-danger">{{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}</span>
+                                @elseif($qty <= $min)
+                                    <span class="badge bg-warning">{{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}</span>
+                                @else
+                                    {{ rtrim(rtrim(number_format($qty, 3, '.', ''), '0'), '.') }}
+                                @endif
+                            </td>
                             <td>
                                 @if($product->batch_expiry_enabled)
                                     {{ $product->expiry_date }}

@@ -86,6 +86,20 @@
                         <div class="invalid-feedback">{{ $message }}</div>
                     @enderror
                 </div>
+                <!-- Store -->
+                <div class="col-md-4">
+                    <label class="form-label">Store</label>
+                    <select class="form-select @error('store_id') is-invalid @enderror" name="store_id">
+                        <option value="">No store (admins only)</option>
+                        @foreach($stores as $st)
+                            <option value="{{ $st->id }}" {{ old('store_id', $user->store_id) == $st->id ? 'selected' : '' }}>{{ $st->name }} ({{ $st->code }})</option>
+                        @endforeach
+                    </select>
+                    <div class="form-text">Employees can only sell for and see sales of this store.</div>
+                    @error('store_id')
+                        <div class="invalid-feedback">{{ $message }}</div>
+                    @enderror
+                </div>
                 <!-- Designation -->
                 <div class="col-md-4">
                     <label class="form-label">Designation</label>

@@ -6,7 +6,7 @@ use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\View;
 use App\Models\Setting;
 use App\Models\Product;
-use Illuminate\Support\Facades\Schema;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\Blade;
 
 class AppServiceProvider extends ServiceProvider
@@ -29,19 +29,33 @@ class AppServiceProvider extends ServiceProvider
             return auth()->check() && auth()->user()->hasPermission($module, $action);
         });
 
-        try {
-            if (Schema::hasTable('settings')) {
-                $settings = Setting::first();
-                View::share('globalSettings', $settings);
+        // Settings are only needed when a view renders; load once per request then
+        View::composer('*', function ($view) {
+            static $settings = false;
+            if ($settings === false) {
+                try {
+                    $settings = Setting::first();
+                } catch (\Exception $e) {
+                    $settings = null; // table not migrated yet
+                }
             }
+            $view->with('globalSettings', $settings);
+        });
 
-            // Share notifications with the header view
+        try {
+            // Share notifications with the header view (cached briefly: 4 queries otherwise run on every page)
             View::composer('layouts.header', function ($view) {
+                // Stock alerts follow the store the user is looking at
+                $storeId = \App\Models\Store::scopedId();
+                $view->with('notifications', Cache::remember('header_notifications_' . ($storeId ?? 'all'), 60, function () use ($storeId) {
                 $notifications = [];
+                $qty = $storeId !== null
+                    ? '(SELECT COALESCE(SUM(ss.quantity), 0) FROM store_stocks ss WHERE ss.product_id = products.id AND ss.store_id = ' . (int) $storeId . ')'
+                    : 'products.stock_quantity';
+                $withQty = fn () => Product::where('status', 'Active')->select('products.*')->selectRaw("$qty as stock_quantity");
 
-                if (Schema::hasTable('products')) {
                     // 1. Out of Stock (Critical)
-                    $outOfStock = Product::where('stock_quantity', '<=', 0)
+                    $outOfStock = $withQty()->whereRaw("$qty <= 0")
                         ->latest()
                         ->limit(5)
                         ->get();
@@ -57,8 +71,7 @@ class AppServiceProvider extends ServiceProvider
                     }
 
                     // 2. Low Stock (Warning) - 10 items or less
-                    $lowStock = Product::where('stock_quantity', '<=', 10)
-                        ->where('stock_quantity', '>', 0)
+                    $lowStock = $withQty()->whereRaw("$qty > 0 AND $qty <= COALESCE(products.min_stock_level, 10)")
                         ->latest()
                         ->limit(5)
                         ->get();
@@ -68,7 +81,7 @@ class AppServiceProvider extends ServiceProvider
                             'type' => 'warning',
                             'icon' => 'fa-triangle-exclamation',
                             'title' => 'Low Stock Alert',
-                            'message' => "{$product->name} has only {$product->stock_quantity} left.",
+                            'message' => "{$product->name} has only " . (float) $product->stock_quantity . " left.",
                             'time' => 'Attention',
                         ];
                     }
@@ -111,9 +124,9 @@ class AppServiceProvider extends ServiceProvider
                             'time' => 'Upcoming',
                         ];
                     }
-                }
 
-                $view->with('notifications', $notifications);
+                return $notifications;
+                }));
             });
 
         } catch (\Exception $e) {

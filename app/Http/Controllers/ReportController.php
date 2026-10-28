@@ -15,7 +15,7 @@ class ReportController extends Controller
             $startDate = $request->input('start_date');
             $endDate = $request->input('end_date');
 
-            $query = Sale::with('customer')
+            $query = Sale::with(['customer', 'store'])
                 ->where('status', 'completed')
                 ->when($startDate, function ($query, $startDate) {
                     return $query->whereDate('date', '>=', $startDate);
@@ -28,6 +28,9 @@ class ReportController extends Controller
             return DataTables::of($query)
                 ->addColumn('customer_name', function ($row) {
                     return $row->customer ? $row->customer->name : 'Walk-in';
+                })
+                ->addColumn('store_name', function ($row) {
+                    return $row->store->name ?? '-';
                 })
                 ->editColumn('payment_method', function ($row) {
                     return ucfirst(str_replace('_', ' ', $row->payment_method));
@@ -347,7 +350,7 @@ class ReportController extends Controller
                 ->get();
             
             $expenses = \App\Models\Expense::whereBetween('date', [$startDate, $endDate])->get();
-            $payrolls = \App\Models\Payroll::whereBetween('payment_date', [$startDate, $endDate])->get();
+            $payrolls = $this->payrollQuery()->whereBetween('payment_date', [$startDate, $endDate])->get();
 
             $dates = [];
             $currentDate = Carbon::parse($startDate);
@@ -453,7 +456,7 @@ class ReportController extends Controller
         }
 
         $totalExpenses = \App\Models\Expense::whereBetween('date', [$startDate, $endDate])->sum('amount');
-        $totalPayroll = \App\Models\Payroll::whereBetween('payment_date', [$startDate, $endDate])
+        $totalPayroll = $this->payrollQuery()->whereBetween('payment_date', [$startDate, $endDate])
             ->get()
             ->sum(function($payroll) {
                 return $payroll->basic_salary + $payroll->allowances;
@@ -479,7 +482,7 @@ class ReportController extends Controller
             ->get();
         
         $expenses = \App\Models\Expense::whereBetween('date', [$startDate, $endDate])->get();
-        $payrolls = \App\Models\Payroll::whereBetween('payment_date', [$startDate, $endDate])->get();
+        $payrolls = $this->payrollQuery()->whereBetween('payment_date', [$startDate, $endDate])->get();
 
         $data = [];
         $currentDate = Carbon::parse($startDate);
@@ -555,9 +558,29 @@ class ReportController extends Controller
 
     public function stockReport(Request $request)
     {
+        // Store-scoped users/filters see that store's quantity in place of the all-stores total.
+        // The derived table keeps the alias "products", so columns, search and ordering are unchanged.
+        $storeId = \App\Models\Store::scopedId();
+        $productQuery = function () use ($storeId) {
+            $query = \App\Models\Product::query();
+            if ($storeId !== null) {
+                $columns = collect(\Illuminate\Support\Facades\Schema::getColumnListing('products'))
+                    ->reject(fn ($c) => $c === 'stock_quantity')
+                    ->map(fn ($c) => 'products.' . $c)
+                    ->all();
+                $inner = \Illuminate\Support\Facades\DB::table('products')
+                    ->leftJoin('store_stocks', function ($join) use ($storeId) {
+                        $join->on('store_stocks.product_id', '=', 'products.id')->where('store_stocks.store_id', '=', $storeId);
+                    })
+                    ->select($columns)
+                    ->selectRaw('CAST(COALESCE(store_stocks.quantity, 0) AS DECIMAL(14,2)) as stock_quantity');
+                $query->fromSub($inner, 'products');
+            }
+            return $query;
+        };
         if ($request->ajax()) {
             $currency = \App\Models\Setting::first()->currency ?? '$';
-            $query = \App\Models\Product::with(['category', 'subCategory', 'unit']);
+            $query = $productQuery()->with(['category', 'subCategory', 'unit']);
 
             return DataTables::of($query)
                 ->addColumn('category_name', function ($row) {
@@ -589,15 +612,35 @@ class ReportController extends Controller
                 ->make(true);
         }
 
-        $totalStockValue = \App\Models\Product::sum(\Illuminate\Support\Facades\DB::raw('stock_quantity * purchase_price'));
-        $totalItems = \App\Models\Product::sum('stock_quantity');
+        $totalStockValue = $productQuery()->sum(\Illuminate\Support\Facades\DB::raw('stock_quantity * purchase_price'));
+        $totalItems = $productQuery()->sum('stock_quantity');
 
         return view('reports.stock', compact('totalStockValue', 'totalItems'));
     }
 
     public function exportStock(Request $request)
     {
-        $products = \App\Models\Product::with(['category', 'unit'])->get();
+        // Store-scoped users/filters see that store's quantity in place of the all-stores total.
+        // The derived table keeps the alias "products", so columns, search and ordering are unchanged.
+        $storeId = \App\Models\Store::scopedId();
+        $productQuery = function () use ($storeId) {
+            $query = \App\Models\Product::query();
+            if ($storeId !== null) {
+                $columns = collect(\Illuminate\Support\Facades\Schema::getColumnListing('products'))
+                    ->reject(fn ($c) => $c === 'stock_quantity')
+                    ->map(fn ($c) => 'products.' . $c)
+                    ->all();
+                $inner = \Illuminate\Support\Facades\DB::table('products')
+                    ->leftJoin('store_stocks', function ($join) use ($storeId) {
+                        $join->on('store_stocks.product_id', '=', 'products.id')->where('store_stocks.store_id', '=', $storeId);
+                    })
+                    ->select($columns)
+                    ->selectRaw('CAST(COALESCE(store_stocks.quantity, 0) AS DECIMAL(14,2)) as stock_quantity');
+                $query->fromSub($inner, 'products');
+            }
+            return $query;
+        };
+        $products = $productQuery()->with(['category', 'unit'])->get();
         $currency = \App\Models\Setting::first()->currency ?? '$';
 
         $filename = "stock_report_" . date('Y-m-d') . ".csv";
@@ -701,5 +744,13 @@ class ReportController extends Controller
             'Content-Type' => 'text/csv',
             'Content-Disposition' => "attachment; filename=\"$filename\"",
         ]);
+    }
+
+    /**
+     * Payroll for the profit report: when one store is selected, only that store's staff.
+     */
+    private function payrollQuery()
+    {
+        return \App\Models\Payroll::query()->when(\App\Models\Store::scopedId(), fn ($q, $storeId) => $q->whereHas('user', fn ($u) => $u->where('store_id', $storeId)));
     }
 }

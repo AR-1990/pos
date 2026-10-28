@@ -8,8 +8,10 @@ use Illuminate\Database\Eloquent\Model;
 class Cashbook extends Model
 {
     use HasFactory;
+    use Concerns\BelongsToStore;
 
     protected $fillable = [
+        'store_id',
         'transaction_date',
         'voucher_no',
         'description',

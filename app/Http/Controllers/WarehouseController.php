@@ -15,7 +15,7 @@ class WarehouseController extends Controller
             if ($request->has('status') && $request->status != 'all') {
                 $query->where('status', $request->status);
             }
-            $data = $query->get();
+            $data = $query; // let DataTables paginate in SQL
             return DataTables::of($data)
                 ->addIndexColumn()
                 ->addColumn('status', function ($row) {

@@ -19,6 +19,7 @@ class ProductSeeder extends Seeder
 
         $subCategory = \App\Models\SubCategory::first() ?? \App\Models\SubCategory::create([
             'category_id' => $category->id,
+            'code' => 'SUB-GEN',
             'name' => 'General Sub',
             'status' => 'Active'
         ]);

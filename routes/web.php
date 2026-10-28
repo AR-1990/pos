@@ -26,9 +26,10 @@ use App\Http\Controllers\ReportController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\LoanTypeController;
 use App\Http\Controllers\ProfileController;
+use App\Http\Controllers\StoreController;
 
 // Auth Routes
-Auth::routes();
+Auth::routes(['register' => false, 'verify' => false]);
 
 // Protected Routes
 Route::middleware(['auth'])->group(function () {
@@ -47,8 +48,11 @@ Route::middleware(['auth'])->group(function () {
         Route::get('/sales/{id}/json', [SalesController::class, 'getSaleDetails'])->name('sales.json');
     });
     Route::post('/sales', [SalesController::class, 'store'])->name('sales.store')->middleware('permission:sales,add');
-    Route::get('/sales/{id}/edit', [SalesController::class, 'edit'])->name('sales.edit')->middleware('permission:sales,edit');
-    Route::put('/sales/{id}', [SalesController::class, 'update'])->name('sales.update')->middleware('permission:sales,edit');
+    Route::get('/sales/{id}/edit', [SalesController::class, 'edit'])->name('sales.edit')->middleware('permission:sales,add');
+    Route::put('/sales/{id}', [SalesController::class, 'update'])->name('sales.update')->middleware('permission:sales,add');
+    Route::post('/sales/{id}/return', [SalesController::class, 'storeReturn'])->name('sales.return')->middleware('permission:sales,add');
+    Route::post('/sales/{id}/void', [SalesController::class, 'void'])->name('sales.void')->middleware('permission:sales,delete');
+    Route::delete('/sales/{id}', [SalesController::class, 'destroy'])->name('sales.destroy')->middleware('permission:sales,add');
 
     // Products Routes
     Route::middleware(['permission:products,view'])->group(function () {
@@ -145,9 +149,25 @@ Route::middleware(['auth'])->group(function () {
     Route::get('/system-settings', [SystemSettingsController::class, 'index'])->name('system-settings.index')->middleware('permission:settings_system,view');
     Route::post('/system-settings', [SystemSettingsController::class, 'update'])->name('system-settings.update')->middleware('permission:settings_system,edit');
 
-    Route::get('/general-settings', function () {
-        return view('general-settings', ['pageTitle' => 'Settings']);
+    Route::redirect('/general-settings', '/system-settings');
+
+    // Store Routes
+    Route::middleware(['permission:stores,view'])->group(function () {
+        Route::get('/stores', [StoreController::class, 'index'])->name('stores.index');
     });
+    Route::get('/stores/create', [StoreController::class, 'create'])->name('stores.create')->middleware('permission:stores,add');
+    Route::post('/stores', [StoreController::class, 'store'])->name('stores.store')->middleware('permission:stores,add');
+    Route::get('/stores/{id}/edit', [StoreController::class, 'edit'])->name('stores.edit')->middleware('permission:stores,edit');
+    Route::put('/stores/{id}', [StoreController::class, 'update'])->name('stores.update')->middleware('permission:stores,edit');
+    Route::post('/stores/{id}/toggle-status', [StoreController::class, 'toggleStatus'])->name('stores.toggle-status')->middleware('permission:stores,status');
+    Route::post('/store-switch', [StoreController::class, 'switch'])->name('stores.switch');
+
+    // Feature modules
+    require __DIR__ . '/modules/purchases.php';   // purchases, vendor payments
+    require __DIR__ . '/modules/stock.php';       // stock levels, ledger, transfers, adjustments, labels
+    require __DIR__ . '/modules/cash.php';        // shifts, customer credit
+
+    Route::get('/audit-logs', [\App\Http\Controllers\AuditLogController::class, 'index'])->name('audit-logs.index')->middleware('permission:audit_logs,view');
 
     Route::middleware(['permission:taxes,view'])->group(function () {
         Route::get('/taxes', [TaxController::class, 'index'])->name('taxes.index');

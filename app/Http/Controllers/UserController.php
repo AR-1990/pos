@@ -13,7 +13,7 @@ class UserController extends Controller
     public function index(Request $request)
     {
         if ($request->ajax()) {
-            $query = User::with('role');
+            $query = User::with(['role', 'store']);
             
             // Filter by status if provided
             if ($request->has('status') && $request->status != 'all') {
@@ -24,6 +24,9 @@ class UserController extends Controller
                 ->addIndexColumn()
                 ->addColumn('role_name', function ($row) {
                     return $row->role ? '<span class="badge bg-info">'.$row->role->name.'</span>' : '-';
+                })
+                ->addColumn('store_name', function ($row) {
+                    return $row->store ? e($row->store->name) : '<span class="text-muted">All / none</span>';
                 })
                 ->filterColumn('role_name', function($query, $keyword) {
                     $query->whereHas('role', function($q) use ($keyword) {
@@ -41,7 +44,7 @@ class UserController extends Controller
                     $btn .= '</div>';
                     return $btn;
                 })
-                ->rawColumns(['role_name', 'status', 'action'])
+                ->rawColumns(['role_name', 'store_name', 'status', 'action'])
                 ->make(true);
         }
         return view('users.index', ['pageTitle' => 'Users Management']);
@@ -50,7 +53,8 @@ class UserController extends Controller
     public function create()
     {
         $roles = Role::where('status', 'Active')->get();
-        return view('users.create', ['pageTitle' => 'Add User', 'roles' => $roles]);
+        $stores = \App\Models\Store::where('status', 'Active')->orderBy('name')->get();
+        return view('users.create', ['pageTitle' => 'Add User', 'roles' => $roles, 'stores' => $stores]);
     }
 
     public function store(Request $request)
@@ -60,6 +64,7 @@ class UserController extends Controller
             'email' => 'required|email|unique:users,email',
             'password' => 'required|confirmed|min:6',
             'role_id' => 'required',
+            'store_id' => 'nullable|exists:stores,id',
             'identity_number' => 'nullable',
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'identity_card_front' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
@@ -119,7 +124,8 @@ class UserController extends Controller
     {
         $user = User::findOrFail($id);
         $roles = Role::where('status', 'Active')->get();
-        return view('users.edit', ['pageTitle' => 'Edit User', 'user' => $user, 'roles' => $roles]);
+        $stores = \App\Models\Store::where('status', 'Active')->orderBy('name')->get();
+        return view('users.edit', ['pageTitle' => 'Edit User', 'user' => $user, 'roles' => $roles, 'stores' => $stores]);
     }
 
     public function update(Request $request, $id)
@@ -130,6 +136,7 @@ class UserController extends Controller
             'name' => 'required',
             'email' => 'required|email|unique:users,email,'.$user->id,
             'role_id' => 'required',
+            'store_id' => 'nullable|exists:stores,id',
             'password' => 'nullable|confirmed|min:6',
             'profile_image' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',
             'identity_card_front' => 'nullable|image|mimes:jpeg,png,jpg,gif|max:2048',

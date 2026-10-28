@@ -5,20 +5,43 @@ namespace App\Http\Controllers;
 use App\Models\Category;
 use App\Models\MeasurementUnit;
 use App\Models\Product;
+use App\Models\Store;
+use App\Models\StoreStock;
 use App\Models\SubCategory;
 use App\Models\Tax;
 use App\Models\Vendor;
+use App\Services\StockService;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
+use Illuminate\Validation\ValidationException;
 
 class ProductController extends Controller
 {
     public function index()
     {
-        $products = Product::with(['unit', 'category', 'subCategory'])->latest()->get();
+        $storeId = Store::scopedId();
+        $query = Product::with(['unit', 'category', 'subCategory'])->latest();
+
+        // Stock column follows the current scope: one store's quantity, or the all-stores total
+        if ($storeId !== null) {
+            $query->select('products.*')->selectSub(
+                StoreStock::withoutGlobalScope('store')->selectRaw('COALESCE(SUM(quantity), 0)')
+                    ->whereColumn('store_stocks.product_id', 'products.id')
+                    ->where('store_stocks.store_id', $storeId),
+                'scoped_stock'
+            );
+        }
+
+        $products = $query->get();
+        if ($storeId === null) {
+            $products->each(fn ($p) => $p->scoped_stock = $p->stock_quantity);
+        }
+
         return view('all-products', [
             'pageTitle' => 'Products',
-            'products' => $products
+            'products' => $products,
+            'stockScope' => $storeId ? (Store::whereKey($storeId)->value('name') ?? 'Store') : ($storeId === 0 ? 'No store' : 'All stores'),
         ]);
     }
 
@@ -29,7 +52,7 @@ class ProductController extends Controller
         $vendors = Vendor::where('status', 'Active')->get();
         // Fetch all active taxes (including Services/Retail) so they appear if assigned to SubCategory
         $taxes = Tax::where('status', 'Active')->get();
-        
+
         // Generate random 3 char prefix for SKU and Code
         $skuPrefix = 'SKU-';
         $codePrefix = 'PDC-';
@@ -41,7 +64,9 @@ class ProductController extends Controller
             'vendors' => $vendors,
             'taxes' => $taxes,
             'skuPrefix' => $skuPrefix,
-            'codePrefix' => $codePrefix
+            'codePrefix' => $codePrefix,
+            'stores' => $this->stockStores(),
+            'defaultStoreId' => auth()->user()->canViewAllStores() ? session('store_filter') : auth()->user()->store_id,
         ]);
     }
 
@@ -61,7 +86,8 @@ class ProductController extends Controller
             'barcode' => 'nullable|string|max:255',
             'purchase_price' => 'required|numeric|min:0',
             'selling_price' => 'required|numeric|min:0',
-            'stock_quantity' => 'nullable|numeric|min:0',
+            'opening_stock' => 'nullable|numeric|min:0',
+            'store_id' => 'nullable|integer',
             'min_stock_level' => 'nullable|integer|min:0',
             'max_stock_level' => 'nullable|integer|min:0',
             'batch_expiry' => 'nullable|in:Yes,No',
@@ -71,23 +97,44 @@ class ProductController extends Controller
             'taxes.*' => 'exists:taxes,id',
         ]);
 
-        $productData = $request->except(['taxes', 'batch_expiry']);
+        $openingStock = (float) $request->input('opening_stock', 0);
+        $storeId = null;
+        if ($openingStock > 0) {
+            $storeId = $this->resolveStockStoreId($request);
+            if (!$storeId) {
+                throw ValidationException::withMessages([
+                    'store_id' => auth()->user()->canViewAllStores()
+                        ? 'Please select the store that holds the opening stock.'
+                        : 'You are not assigned to any store. Ask an admin to assign one.',
+                ]);
+            }
+        }
+
+        // Stock only changes through StockService, so the product starts at 0
+        $productData = $request->except(['taxes', 'tax_rates', 'batch_expiry', 'opening_stock', 'store_id', 'stock_quantity', '_token']);
+        $productData['stock_quantity'] = 0;
         $productData['batch_expiry_enabled'] = $request->batch_expiry === 'Yes';
-        
+
         // If Batch/Expiry is No, ensure expiry_date is null
         if (!$productData['batch_expiry_enabled']) {
             $productData['expiry_date'] = null;
         }
 
-        $product = Product::create($productData);
+        DB::transaction(function () use ($request, $productData, $openingStock, $storeId) {
+            $product = Product::create($productData);
 
-        if ($request->has('taxes')) {
-            $syncData = [];
-            foreach ($request->taxes as $taxId) {
-                $syncData[$taxId] = ['tax_rate' => $request->input('tax_rates.' . $taxId)];
+            if ($request->has('taxes')) {
+                $syncData = [];
+                foreach ($request->taxes as $taxId) {
+                    $syncData[$taxId] = ['tax_rate' => $request->input('tax_rates.' . $taxId)];
+                }
+                $product->taxes()->sync($syncData);
             }
-            $product->taxes()->sync($syncData);
-        }
+
+            if ($openingStock > 0) {
+                StockService::move($storeId, $product->id, $openingStock, 'opening', $product, 'Opening stock');
+            }
+        });
 
         return redirect()->route('all-products')->with('success', 'Product added successfully.');
     }
@@ -101,6 +148,9 @@ class ProductController extends Controller
         $vendors = Vendor::where('status', 'Active')->get();
         $taxes = Tax::where('status', 'Active')->get();
 
+        // Read-only; the StoreStock store scope limits employees to their own store
+        $storeStocks = StoreStock::with('store')->where('product_id', $product->id)->get();
+
         return view('edit-product', [
             'pageTitle' => 'Edit Product',
             'product' => $product,
@@ -108,14 +158,15 @@ class ProductController extends Controller
             'subCategories' => $subCategories,
             'units' => $units,
             'vendors' => $vendors,
-            'taxes' => $taxes
+            'taxes' => $taxes,
+            'storeStocks' => $storeStocks,
         ]);
     }
 
     public function update(Request $request, $id)
     {
         $product = Product::findOrFail($id);
-        
+
         $request->validate([
             'sku' => 'required|string|max:255|unique:products,sku,' . $id,
             'code' => 'required|string|max:255|unique:products,code,' . $id,
@@ -130,7 +181,6 @@ class ProductController extends Controller
             'barcode' => 'nullable|string|max:255',
             'purchase_price' => 'required|numeric|min:0',
             'selling_price' => 'required|numeric|min:0',
-            'stock_quantity' => 'nullable|numeric|min:0',
             'min_stock_level' => 'nullable|integer|min:0',
             'max_stock_level' => 'nullable|integer|min:0',
             'batch_expiry' => 'nullable|in:Yes,No',
@@ -140,9 +190,10 @@ class ProductController extends Controller
             'taxes.*' => 'exists:taxes,id',
         ]);
 
-        $productData = $request->except(['taxes', 'batch_expiry']);
+        // Stock is never edited here: it changes through Stock Adjustments / Transfers
+        $productData = $request->except(['taxes', 'tax_rates', 'batch_expiry', 'stock_quantity', 'opening_stock', 'store_id', '_token', '_method']);
         $productData['batch_expiry_enabled'] = $request->batch_expiry === 'Yes';
-        
+
         if (!$productData['batch_expiry_enabled']) {
             $productData['expiry_date'] = null;
         }
@@ -176,7 +227,7 @@ class ProductController extends Controller
         $subCategories = SubCategory::where('category_id', $categoryId)
             ->where('status', 'Active')
             ->get(['id', 'name']);
-        
+
         return response()->json($subCategories);
     }
 
@@ -196,5 +247,31 @@ class ProductController extends Controller
         });
 
         return response()->json($taxes);
+    }
+
+    /** Stores the user can put opening stock into (employees: only their own). */
+    private function stockStores()
+    {
+        $user = auth()->user();
+        $query = Store::where('status', 'Active')->orderBy('name');
+
+        if (!$user->canViewAllStores()) {
+            $query->whereKey($user->store_id ?? 0);
+        }
+
+        return $query->get();
+    }
+
+    private function resolveStockStoreId(Request $request)
+    {
+        $user = $request->user();
+
+        if (!$user->canViewAllStores()) {
+            return $user->store_id ? (int) $user->store_id : null;
+        }
+
+        $storeId = $request->input('store_id') ?: session('store_filter');
+
+        return $storeId && Store::where('status', 'Active')->whereKey($storeId)->exists() ? (int) $storeId : null;
     }
 }
